@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+#SparCC
+.vscode
+*.pyc
+*.ipynb_checkpoints/
+*.lock
+*.png
+*.log
+*.csv
+*.hdf5
+
+

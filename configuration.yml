@@ -1,0 +1,22 @@
+# Correlation Calculation
+
+name: 'experiment_sparCC' 
+data_input: 'example/fake_data.txt'
+method: 'sparcc'
+n_iteractions: 2 #Recommended value between 50 and 100
+x_iteractions: 2 
+threshold: 0.1
+normalization: 'dirichlet'
+log_transform: True
+save_corr_file: 'example/cor_sparcc.csv'
+save_cov_file:  Null
+
+# Pseudo p-value Calculation
+num_simulate_data: 3 #Recommended >=50
+perm_template: 'permutation_#.csv' 
+outpath: 'example/pvals/'
+type_pvalues: 'one_sided'
+outfile_pvals : 'example/pvals/pvals_one_sided.csv'
+
+# Output file
+name_output_file: 'sparcc_test_version_kambucha'
