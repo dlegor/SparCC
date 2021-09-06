@@ -1,0 +1,31 @@
+name: SparCC-env
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - bokeh==2.2.0
+  - dask=2.20.*
+  - h5py=2.10.*
+  - hdf5=1.10.*
+  - matplotlib-base
+  - numba
+  - pandas
+  - pip 
+  - pylint
+  - python=3.8
+  - scipy
+  
+
+  - pip:
+    - pyarrow
+    - streamlit
+    - pytest
+    - ipython
+    - umap-learn
+    - scikit-bio
+    - wasabi
+    - typer
+
+    
