@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 '''
 SparCC is a python module for computing correlations in compositional data 
 @DLegorreta
