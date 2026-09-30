@@ -1,181 +1,225 @@
-# **SparCC** 
+# **SparCC**
 
-SparCC is a Python module for calculating correlations in compositional data (16S, metagenomics, etc.). This implementation is very similar to [original](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002687), but enriched with dask and numba.
+SparCC is a Python module for computing correlations in compositional data (16S rRNA, metagenomics, etc.). It closely follows the [original SparCC algorithm](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002687) (Friedman & Alm, 2012), and uses [Dask](https://www.dask.org/) and [Numba](https://numba.pydata.org/) for speed and out-of-core processing.
 
-There are two ways of execution, using each *script step by step* or defining the required parameters from the *configuration file*. 
+You can run SparCC in two ways:
 
-********************************
-## **By Scripts** 
-********************************
-
-Scripts in the root SparCC directory can be called from the terminal command-line either by explicitly calling python (as is done in the usage examples below), or simply as an executable. The latter will require having execution permission for these file (e.g. chmod +x Compute_SparCC.py).
-
-Help for any one for the scripts in the root SparCC directory is available by typing:
-~~~python 
-'python [script_name] - h'
-~~~ 
-in the command line. e.g.:
-
-~~~bash
-python Compute_SparCC.py -h
-~~~
-
-~~~bash
-python MakeBootstraps.py -h
-~~~
-
-~~~bash
-python PseudoPvals.py -h 
-~~~
+- **Step by step**, calling each script yourself (see [Running the scripts](#running-the-scripts)).
+- **End to end**, with every parameter set in a configuration file (see [Running with a configuration file](#running-with-a-configuration-file)).
 
 ********************************
-Execution by scripts example 
+## **Installation**
 ********************************
 
-- The following lists the commands required for analyzing the included 'fake' dataset using the sparcc package, and generating all the files present in the subfolders of the example folder.
-
-- The fake dataset contains simulated abundances of 50 otus in 200 samples, drawn at random from a multinomial log-normal distribution. The true basis correlations used to generate the data are listed in 'true_basis_cor.txt' in the example folder.
-
-- Note that otu 0 is very dominant, and thus, using Pearson or Spearman correlations, appears to be negatively correlated with most other OTUs, though it is in fact not negatively correlated with any OTU.
-
-Correlation Estimation:
-------------------------
-
-First, we'll quantify the correlation between all OTUs, using SparCC:
+The project uses [`uv`](https://docs.astral.sh/uv/) and requires **Python 3.12 or later**. From the repository root, run:
 
 ~~~bash
-python Compute_SparCC.py  -n Experiment_SparCC -di example/fake_data.txt -ni 5 --save_cor=example/basis_corr/cor_sparcc.csv
+uv sync
 ~~~
 
-
-Pseudo p-value Calculation:
----------------------------
-
-Calculating pseudo p-values is done via a bootstrap procedure.
-First make shuffled (w. replacement) datasets:
+This creates a `.venv` and installs the exact dependency versions pinned in `uv.lock`. Run any script through `uv run`, for example:
 
 ~~~bash
-python MakeBootstraps.py example/fake_data.txt -n 5 -t permutation_#.csv -p example/pvals/
+uv run python Compute_SparCC.py -h
 ~~~
 
-This will generate 5 shuffled datasets, which is clearly not enough to get meaningful p-values, and is used here for convenience.
+> **Note:** Earlier versions used a conda `environment.yml`. It has been replaced by `pyproject.toml`/`uv.lock`, and the dependency list now contains only the packages the code actually imports.
 
-A more appropriate number of shuffles should be at least a 100, which is the default value. 
+********************************
+## **Running the tests**
+********************************
 
-Next, you'll have to run SparCC on each of the shuffled data sets. 
-Make sure to use the exact same parameters which you used when running SparCC on the real data, name all the output files consistently, numbered sequentially, and with a '.txt'(or csv) extension.
+The test suite uses [pytest](https://docs.pytest.org/). The dev dependencies (`pytest`, `ruff`, `mypy`) are installed by `uv sync`. Run all commands from the repository root:
 
-* method one: one by one.
 ~~~bash
-python SparCC.py example/pvals/permutation_0.txt -i 5 --cor_file=example/pvals/perm_cor_0.txt
-python SparCC.py example/pvals/permutation_1.txt -i 5 --cor_file=example/pvals/perm_cor_1.txt
-python SparCC.py example/pvals/permutation_2.txt -i 5 --cor_file=example/pvals/perm_cor_2.txt
-python SparCC.py example/pvals/permutation_3.txt -i 5 --cor_file=example/pvals/perm_cor_3.txt
-python SparCC.py example/pvals/permutation_4.txt -i 5 --cor_file=example/pvals/perm_cor_4.txt
+uv run pytest -q                                   # run the whole suite
+uv run pytest tests/test_SparCC.py                 # run a single file
+uv run pytest tests/test_SparCC.py::test_run_sparcc  # run a single test
+uv run pytest -k clr                               # run tests whose name matches "clr"
+uv run pytest -x -v                                # verbose; stop at the first failure
 ~~~
 
+The tests live in `tests/`, with one file per module:
 
-* method two (bash code): all with a loop.
+| Test file | Covers |
+|---|---|
+| `tests/test_SparCC.py` | Core algorithm (`sparcc/SparCC.py`) |
+| `tests/test_compositional_methods.py` | CLR transform and variation matrix |
+| `tests/test_core_methods.py` | Counts-to-fractions normalization |
+| `tests/test_io_methods.py` | Reading and writing tables |
+| `tests/test_args.py` | Command-line parsing for `Compute_SparCC.py` |
+| `tests/test_bootstraps_pvals.py` | `MakeBootstraps.py` and `PseudoPvals.py` |
+
+pytest is configured in `pyproject.toml` under `[tool.pytest.ini_options]`. That configuration also puts the repository root on the import path, so the tests can import the root-level scripts. The first run is a few seconds slower because Numba compiles the `@njit` functions.
+
+Linting and type checking:
 
 ~~~bash
-for i in `seq 0 4`; do python Compute_SparCC.py --name Experiment_PVals -di example/pvals/permutation_$i.csv --save_cor example/pvals/perm_cor_$i.csv  >> case_example.log; done
+uv run ruff check .
+uv run mypy sparcc/
 ~~~
 
-Above I'm simply called SparCC 5 separate times. Now that we have all the correlations computed from the shuffled datasets, we're ready to get the pseudo p-values.
+********************************
+## **Running the scripts**
+********************************
 
-Remember to make sure all the correlation files are in the same folder, are numbered sequentially, and have a '.txt' extension(or .csv).
+Run the scripts in the repository root with Python, as in the examples below. To run one directly as an executable, first give it execute permission (e.g. `chmod +x Compute_SparCC.py`).
 
-The following will compute both one and two sided p-values.
+Each script prints its help with `-h`:
 
 ~~~bash
-python PseudoPvals.py example/basis_corr/cor_sparcc.csv example/pvals/perm_cor_#.csv 5 -o example/pvals/pvals_one_sided.csv -t one_sided
-
-#another option 
-
-#python PseudoPvals.py example/basis_corr/cor_sparcc.out example/pvals/perm_cor_#.txt 5 -o example/pvals/pvals.one_sided.txt -t two_sided
+uv run python Compute_SparCC.py -h
+uv run python MakeBootstraps.py -h
+uv run python PseudoPvals.py -h
 ~~~
 
----
-## **Run with configuration**
----
-For this case, the *General_Execution.py* script is used. For its operation, all the necessary parameters must be defined in the configuratio.yml file.
+### Example: the "fake" dataset
 
-**************************
-## Run with configuration
-**************************
-To estimate SparCC in this way, you must fill in all the fields in the **configuration.yml** file. If you leave it as None, the value to run SparCC will be the default.
+The commands below analyze the example dataset in `example/`:
 
-Required fields
+- `example/fake_data.txt` contains simulated abundances of 50 OTUs in 200 samples, drawn from a multinomial log-normal distribution.
+- `example/true_basis_cor.txt` contains the true basis correlations used to generate the data.
+- OTU 0 is very dominant. Pearson or Spearman correlations therefore make it look negatively correlated with most other OTUs, although it is not negatively correlated with any of them. SparCC corrects for this compositional effect.
+
+Input files are delimited text: `.txt` files are read as tab-separated and `.csv` files as comma-separated. Components (OTUs) are rows and samples are columns.
+
+#### 1. Correlation estimation
+
+Compute the SparCC correlations between all OTUs:
 
 ~~~bash
-# Correlation Calculation
+uv run python Compute_SparCC.py -n Experiment_SparCC -di example/fake_data.txt -ni 5 --save_cor example/basis_corr/cor_sparcc.csv
+~~~
 
-name: 'experiment_sparCC' 
+Add `--save_cov <file>` to also write the covariance matrix. Intermediate results are staged in a private temporary directory, which is removed when the run finishes.
+
+#### 2. Pseudo p-values
+
+Pseudo p-values are computed with a bootstrap procedure. First, create resampled datasets. In each one, every OTU's abundance in each sample is drawn with replacement from that OTU's abundances across all samples:
+
+~~~bash
+uv run python MakeBootstraps.py example/fake_data.txt -n 5 -t permutation_#.csv -p example/pvals/
+~~~
+
+This creates 5 datasets. That is far too few for meaningful p-values and is only meant to keep the example quick. Use at least 100, which is the default.
+
+Next, run SparCC on each resampled dataset. **Use exactly the same parameters as for the real data.** Name the output files consistently and number them sequentially, since the `#` in the template stands for the number.
+
+One at a time:
+
+~~~bash
+uv run python Compute_SparCC.py -di example/pvals/permutation_0.csv -ni 5 --save_cor example/pvals/perm_cor_0.csv
+uv run python Compute_SparCC.py -di example/pvals/permutation_1.csv -ni 5 --save_cor example/pvals/perm_cor_1.csv
+# ... and so on up to permutation_4.csv
+~~~
+
+Or in a bash loop:
+
+~~~bash
+for i in $(seq 0 4); do
+  uv run python Compute_SparCC.py -n Experiment_PVals -di example/pvals/permutation_$i.csv -ni 5 \
+    --save_cor example/pvals/perm_cor_$i.csv --verbose False
+done
+~~~
+
+Finally, compare the real correlations with the resampled ones.
+
+- **One-sided** p-values take the sign of the correlation into account:
+
+  ~~~bash
+  uv run python PseudoPvals.py example/basis_corr/cor_sparcc.csv example/pvals/perm_cor_#.csv 5 -o example/pvals/pvals_one_sided.csv -t one_sided
+  ~~~
+
+- **Two-sided** p-values consider only the magnitude:
+
+  ~~~bash
+  uv run python PseudoPvals.py example/basis_corr/cor_sparcc.csv example/pvals/perm_cor_#.csv 5 -o example/pvals/pvals_two_sided.csv -t two_sided
+  ~~~
+
+********************************
+## **Running with a configuration file**
+********************************
+
+`General_Execution.py` runs the whole pipeline: correlation, bootstraps, a correlation for each bootstrap, then p-values. It reads its parameters from `configuration.yml`:
+
+~~~yaml
+# Correlation calculation
+name: 'experiment_sparCC'
 data_input: 'example/fake_data.txt'
 method: 'sparcc'
-n_iteractions: 5
+n_iteractions: 5          # recommended: 50-100
 x_iteractions: 10
 threshold: 0.1
 normalization: 'dirichlet'
 log_transform: True
-save_corr_file: 'example/cor_sparcc.csv' 
-save_cov_file:  Null
+save_corr_file: 'example/cor_sparcc.csv'
+save_cov_file: Null
 
-# Pseudo p-value Calculation
-
-num_simulate_data: 5
-perm_template: 'permutation_#.csv' 
+# Pseudo p-value calculation
+num_simulate_data: 5      # recommended: >= 100
+perm_template: 'permutation_#.csv'
 outpath: 'example/pvals/'
 type_pvalues: 'one_sided'
-outfile_pvals : 'example/pvals/pvals_one_sided.csv'
+outfile_pvals: 'example/pvals/pvals_one_sided.csv'
 
 # Output file
-
 name_output_file: 'sparcc_version1'
-
-~~~
-Only the following is required to run the script:
-
-~~~python
-python General_Execution.py 
 ~~~
 
-The output with the previous configuration, would be the files:
-* cor_sparcc.csv
-* pvals_one_sided.csv
+If a field is set to `Null`, the script that uses it falls back to its default. For example, `x_iteractions: Null` uses the `Compute_SparCC.py` default of 10. `save_cov_file: Null` means no covariance file is written. To run the pipeline:
+
+~~~bash
+uv run python General_Execution.py
+# or with another configuration file:
+uv run python General_Execution.py --configuration-file my_config.yml
+~~~
+
+With the configuration above, the run produces:
+
+- `example/cor_sparcc.csv`: the correlation matrix.
+- `example/pvals/pvals_one_sided.csv`: the pseudo p-values.
+
+The intermediate bootstrap files are deleted automatically. If any step fails, the pipeline stops.
 
 ********************
-## Kombucha dataset example
+## **Worked example with your own data**
 ********************
 
-There are 5 steps to process the data:
+A typical analysis of your own OTU table (replace `path/to/otu_table.txt` with your file) has five steps.
 
-**Step 1 :** SparCC Estimation of the Otus.
+**Step 1:** Estimate the SparCC correlations.
+
 ~~~bash
-python Compute_SparCC.py  -n Experiment_SparCC -di /home/dlegorreta/Documentos/ixulabs/4Cienegas/Data/T1B_Tapetes_secos-20191006T171745Z-001/T1B_Tapetes_secos/OTUs/filtered_otu_table_t1b.txt -xi 50  -ni 100 --save_cor=sparcc_output/cor_sparcc_tapetes.csv
+uv run python Compute_SparCC.py -n Experiment_SparCC -di path/to/otu_table.txt -xi 50 -ni 100 --save_cor sparcc_output/cor_sparcc.csv
 ~~~
 
-**Step 2 :** Make Bootstraps with the Otus.
+**Step 2:** Create the bootstrap datasets.
+
 ~~~bash
-python MakeBootstraps.py /home/dlegorreta/Documentos/ixulabs/4Cienegas/Data/T1B_Tapetes_secos-20191006T171745Z-001/T1B_Tapetes_secos/OTUs/filtered_otu_table_t1b.txt -n 100 -t permutation_#.csv -p pvals/
+uv run python MakeBootstraps.py path/to/otu_table.txt -n 100 -t permutation_#.csv -p pvals/
 ~~~
 
-**Step 3 :** SparCC estimation on all files from Step 2.
+**Step 3:** Run SparCC on every bootstrap dataset from Step 2, with the same parameters as Step 1.
+
 ~~~bash
-for i in `seq 0 99`; do python Compute_SparCC.py --name Experiment_PVals -di pvals/permutation_$i.csv --save_cor pvals/perm_cor_$i.csv --verbose False >> Pval_Tapetes.log; done
+for i in $(seq 0 99); do
+  uv run python Compute_SparCC.py -n Experiment_PVals -di pvals/permutation_$i.csv -xi 50 -ni 100 \
+    --save_cor pvals/perm_cor_$i.csv --verbose False
+done
 ~~~
 
-**Step 4 :** Estimation of P-test on all SparCC files from subsamples.
+**Step 4:** Compute the pseudo p-values from the 100 bootstrap correlations.
+
 ~~~bash
-python PseudoPvals.py sparcc_output/cor_sparcc.csv pvals/perm_cor_#.csv 5 -o example/pvals/pvals_one_sided.csv -t one_sided
+uv run python PseudoPvals.py sparcc_output/cor_sparcc.csv pvals/perm_cor_#.csv 100 -o sparcc_output/pvals_one_sided.csv -t one_sided
 ~~~
 
-**Step 5 :** Take only the Otus with p-values ​​that satisfy the hypothesis test, that is, if the significance level is p = 0.05, those that are equal to or less than that value are rejected.
+**Step 5:** Keep only the OTU pairs whose p-value is at or below your significance level, e.g. `p <= 0.05`.
 
-**Note:** This example can be run with the configuration file, you only need to define the parameters similar to the ones that were used.
+**Note:** You can run the same analysis with `General_Execution.py` by putting these parameters in the configuration file.
 
 *********
-Refernce
+## **Reference**
 *********
 
-Detailed information about the algorithm can be found in the accompanying [publication](<http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002687>).  
+Friedman J, Alm EJ (2012). *Inferring Correlation Networks from Genomic Survey Data.* PLoS Comput Biol 8(9): e1002687. [Publication](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1002687)

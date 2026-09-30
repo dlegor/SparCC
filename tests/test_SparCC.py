@@ -1,10 +1,23 @@
-import pytest
+"""
+Tests for sparcc/SparCC.py (Mesh, new_excluded_pair, basis_var, C_from_V,
+run_sparcc, basic_corr, main_alg).
+
+Run with: uv run pytest tests/test_SparCC.py
+"""
+import os
+
 import numpy as np
+import pytest
 
-from SparCC.sparcc.SparCC import Mesh,new_excluded_pair
-from SparCC.sparcc.SparCC import basic_corr,basis_var
-from SparCC.sparcc.SparCC import C_from_V,run_sparcc
-
+from sparcc.SparCC import (
+    C_from_V,
+    Mesh,
+    basic_corr,
+    basis_var,
+    main_alg,
+    new_excluded_pair,
+    run_sparcc,
+)
 
 #Constant
 ######################################
@@ -25,9 +38,9 @@ M2=np.array([0.51020408, 0.51020408, 0.51020408, 0.51020408, 0.51020408,
        0.51020408, 0.51020408, 0.51020408, 0.51020408, 0.51020408,
        0.51020408, 0.51020408, 0.51020408, 0.51020408, 0.51020408])
 D=50
-M = np.ones((D,D)) + np.diag([D-2]*D) 
+M = np.ones((D,D)) + np.diag([D-2]*D)
 V=np.ones((50,50))
- 
+
 M3=np.array([[0.5, 1. , 1. , 1. , 1. , 1. , 1. , 1. , 1. , 1. ],
         [1. , 0.5, 1. , 1. , 1. , 1. , 1. , 1. , 1. , 1. ],
         [1. , 1. , 0.5, 1. , 1. , 1. , 1. , 1. , 1. , 1. ],
@@ -61,11 +74,11 @@ A= np.zeros((50,50))
 ##############################################################################
 
 
-class  Test_Mesh():
-    def test_one(seft):
+class  Test_Mesh:
+    def test_one(self):
         a,b=Mesh(x)
         assert np.all(np.around(b,decimals=2)==M1)
-    
+
     def test_two(self):
         xx,yy=np.meshgrid(x,x)
         a,b=Mesh(x)
@@ -76,7 +89,7 @@ class TestNew_Excluded_Pair:
 
     def test_one(self):
         a=new_excluded_pair(A)
-        assert a==None
+        assert a is None
 
     def test_two(self):
         a=new_excluded_pair(M1)
@@ -107,8 +120,22 @@ def test_basic_corr():
     assert A.sum()==Value
 
 
+def test_main_alg_uses_given_staging_dirs(tmp_path):
+    rng = np.random.default_rng(0)
+    counts = rng.integers(1, 100, size=(30, 8))
+    cor_dir = tmp_path / 'cor'
+    cov_dir = tmp_path / 'cov'
+    cor_dir.mkdir()
+    cov_dir.mkdir()
+
+    cor, cov = main_alg(counts, n_iter=3, x_iter=2, verbose=False,
+                        path_subdir_cor=str(cor_dir), path_subdir_cov=str(cov_dir))
+
+    assert cor.shape == cov.shape == (8, 8)
+    assert len(os.listdir(cor_dir)) == 3 and len(os.listdir(cov_dir)) == 3
 
 
-
-
-
+def test_main_alg_unsupported_method(tmp_path):
+    with pytest.raises(ValueError):
+        main_alg(np.ones((10, 5)), method='pearson',
+                 path_subdir_cor=str(tmp_path), path_subdir_cov=str(tmp_path))
