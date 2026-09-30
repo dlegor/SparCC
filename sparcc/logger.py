@@ -1,19 +1,15 @@
 '''
 Class to create the record
 '''
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import logging
 import time
 from datetime import timedelta
 
 
-class LogFormatter(object):
+class LogFormatter(logging.Formatter):
 
     def __init__(self):
+        super().__init__()
         self.start_time = time.time()
 
     def format(self, record):

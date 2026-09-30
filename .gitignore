@@ -133,9 +133,9 @@ dmypy.json
 *.pyc
 *.ipynb_checkpoints/
 *.lock
+!uv.lock
 *.png
 *.log
 *.csv
 *.hdf5
-
-
+CLAUDE.md

@@ -1,23 +1,23 @@
-from typing import Dict,Text,Tuple,Union,Any
-from pathlib import Path
-from shutil import rmtree
 import math
 import os
-
 import sys
+from pathlib import Path
+from shutil import rmtree
+from typing import Any
+
+import numpy as np
 from pandas import Series
-from numpy.random import RandomState
 
 try:
     import psutil
 except ImportError:
     psutil = None
 
-__all__ = ["cpu_count",
-           "CPU_COUNT",
+__all__ = ["CPU_COUNT",
            "check_memory_available",
-           "system_sanity_check",
-           "clean_data_folder"]
+           "clean_data_folder",
+           "cpu_count",
+           "system_sanity_check"]
 
 
 def cpu_count():
@@ -60,76 +60,59 @@ def cpu_count():
 
 CPU_COUNT = cpu_count()
 
-def check_memory_available()->Dict[Text,float]:
-    """
-    If the  psutil packages is available, return a dictionary 
-    with information about the memory: total, available and percentage of memory.
-    """
-    
-    MemoryD=dict()
 
-    if psutil==None:
+def check_memory_available() -> dict[str, Any] | None:
+    """
+    If the psutil package is available, return a dictionary with information
+    about the memory (total, available, percentage used) and the CPU count.
+    Returns None when psutil is not installed.
+    """
+    if psutil is None:
         return None
-    
-    if psutil != None:
-        mem=psutil.virtual_memory()
-        MemoryD['Total Memory']=str(round(mem.total/1e9,2))+' GB'
-        MemoryD['Available Memory']=str(round(mem.available/1e9,2))+' GB'
-        MemoryD['Percent']=str(mem.percent)+'%'
-        MemoryD['Num Core']=CPU_COUNT
-        return MemoryD
 
-def system_sanity_check(size:Tuple=None):
+    mem = psutil.virtual_memory()
+    return {
+        'Total Memory': str(round(mem.total / 1e9, 2)) + ' GB',
+        'Available Memory': str(round(mem.available / 1e9, 2)) + ' GB',
+        'Percent': str(mem.percent) + '%',
+        'Num Core': CPU_COUNT,
+    }
+
+
+def system_sanity_check(size: tuple[int, ...] | None = None) -> dict[str, Any] | None:
     """
-    Check the memory required for the SparCC algorithm, 
-    if your memory is insufficient, then the function raises an exception.
+    Report the memory available for the SparCC algorithm.
 
+    If ``size`` (the shape of a matrix to process) is given, try to allocate an
+    integer matrix of that shape and add its size in GB to the report under
+    'Size_Matrix'. A MemoryError is reported and re-raised.
     """
-    message1='You do not give information about some matrix to processing.'\
-        'But the information available in your system is:\n'
-    
-    message1='You do not give information about some matrix to processing.'\
-        'But the information available in your system is:\n'
+    info_memory = check_memory_available()
 
-    message2='The memory overflows, but the information of your systems is:\n'
+    if size is None:
+        print('No matrix size was given. The information available in your system is:\n')
+        if info_memory is not None:
+            print(Series(info_memory, name='Information').to_string())
+        return info_memory
 
-    if size==None:
-        print(message1)
-        Info_Memory=check_memory_available()
-        print(Series(Info_Memory,name='Information ').to_markdown())
+    try:
+        size_gb = np.zeros(size, dtype=np.int64).nbytes / 1e9
+    except MemoryError:
+        print('The memory overflows. The information available in your system is:\n')
+        if info_memory is not None:
+            print(Series(info_memory, name='Information').to_string())
+        raise
+
+    if info_memory is not None:
+        info_memory['Size_Matrix'] = size_gb
+    return info_memory
 
 
-    else:
-         rs=RandomState()
-         try:
-             a=rs.randint(0,100,size=size)
-             Size_a=a.nbytes/1e9
-             Info_Memory=check_memory_available()
-             Info_Memory['Size_Matrix']=Size_a
-             #print(Series(Info_Memory,name='Information ').to_markdown())
-             return Info_Memory
-
-         except MemoryError as error:
-            print("{}".format(error))
-         else:
-            
-            print(message2)
-            Info_Memory=check_memory_available()
-            #print(Series(Info_Memory,name='Information ').to_markdown())
-            return Info_Memory
-        
-def clean_data_folder(path_folder:Union[str,Path])->Any:
-    
-    path_folder=Path(path_folder)
+def clean_data_folder(path_folder: str | Path) -> None:
+    """Recursively delete ``path_folder``, which must be a directory."""
+    path_folder = Path(path_folder)
 
     if path_folder.is_dir():
         rmtree(path_folder.resolve())
     else:
-        raise EOFError("This is not a directory")
-
-
-
-
-
-
-
+        raise NotADirectoryError(f'"{path_folder}" is not a directory')
